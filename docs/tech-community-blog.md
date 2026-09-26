@@ -1,4 +1,4 @@
-# How to make AI responses faster on Microsoft Foundry: evidence from 2,040 analyzed task attempts
+# How to make AI responses faster on Microsoft Foundry: lessons from 2,040 measurements
 
 ![Grouped bars compare median AI-path latency for non-optimized Standard pay-as-you-go, optimized Standard pay-as-you-go, and optimized with Priority Processing across text, image, file, and function tool workloads; total reductions range from 23% to 50%.](./images/ai-response-latency-hero.png)
 
@@ -6,7 +6,7 @@ A faster model does not always make an AI application faster.
 
 Latency also comes from output length, repeated prompt content, image and document processing, tool selection, connection setup, serial waits, and extra model requests.
 
-We analyzed 2,040 task attempts covering text, image, file, function-tool, MCP, and Microsoft Foundry Toolbox workloads. The result is a practical sequence: remove unnecessary work, reuse what can be reused, remove serial waits and avoidable model requests, then test Priority Processing.
+Across 2,040 analyzed measurements, the useful sequence was consistent: remove unnecessary work, reuse what can be reused, remove serial waits and avoidable model requests, then test Priority Processing.
 
 In a combined benchmark, supported software changes plus verified Priority Processing reduced median AI-path latency by **23% to 50%**, depending on the workload, compared with a non-optimized Standard pay-as-you-go configuration.
 
@@ -27,29 +27,15 @@ That is a comparison of complete configurations. It is **not** the isolated effe
 
 ## What we measured
 
-We used five deterministic fixtures per scenario, three unmeasured warm-ups, and 30 randomized rounds per case. Treatment and control ran against the same rotating fixtures in a seeded, interleaved schedule. Comparisons were paired by round when treatment and control were part of the same execution.
+We ran 30 randomized rounds per case across five deterministic fixtures. Treatment and control used the same rotating fixtures and were paired when they ran in the same execution.
 
-The full evidence set contains:
+The analyzed dataset contains **2,040 measurements**. The audit trail contains 2,160 publication executions, excluding cloud preflights; 120 earlier client-lifecycle runs were excluded after we corrected the timing boundary.
 
-- 1,680 analyzed measurements from the one-lever screen, including the corrected client-lifecycle comparison;
-- 120 earlier client-lifecycle timing runs discarded from analysis;
-- 360 measurements from the three-configuration combined benchmark;
-- 2,040 analyzed measurements;
-- 2,160 measured publication executions, excluding cloud preflights, after including 120 discarded timing runs.
+Failed and incorrect runs remain in the reliability counts. We calculate latency percentiles only from successful, correctness-passing runs.
 
-We retained failed and incorrect attempts in reliability counts. Latency percentiles include only successful, correctness-passing attempts.
+**AI-path latency** starts immediately before a model request or composed model-and-tool loop and stops after validation. It excludes user-to-application networking, UI rendering, and preprocessing such as image resizing, PDF generation, text extraction, or OCR. It is not click-to-render latency.
 
-The reported **AI-path latency** starts immediately before a model request or composed model-and-tool loop and stops after the result has been validated. It excludes:
-
-- user-to-application networking;
-- UI rendering;
-- image resizing and encoding;
-- PDF generation;
-- text extraction or OCR performed before the request.
-
-This is therefore not click-to-render latency. When preprocessing was outside the timer, we use narrow claims such as "with text already extracted, the AI path was faster."
-
-The one-lever screen used `gpt-4.1-mini`. The Priority Processing comparison used `gpt-4.1`, version `2025-04-14`, on one Global Standard deployment in East US 2. We did not benchmark Provisioned Throughput, Foundry Agent Service invocations, RAG, or voice-agent latency in the main comparison.
+The one-lever screen used `gpt-4.1-mini`. The Priority Processing comparison used `gpt-4.1`, version `2025-04-14`, on one Global Standard deployment in East US 2. Provisioned Throughput, Foundry Agent Service, RAG, and voice-agent latency were outside the main comparison.
 
 The [lab report](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/docs/lab-report.md) documents the complete protocol, architecture, results, and limitations. The [result ledger](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/docs/publication-results.md) contains the execution IDs, artifact versions, confidence intervals, and reliability events.
 
