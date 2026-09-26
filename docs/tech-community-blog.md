@@ -112,22 +112,46 @@ Use text when the task depends only on textual facts. Keep native document proce
 
 ### Put repeated prompt content first
 
-Prompt caching reuses work on a matching prefix. It does not cache the answer, and it does not independently cache arbitrary fields.
+Prompt caching does not store the model's answer. It temporarily reuses work the service already performed on the **beginning of a long input**. The first request is processed normally; later requests can reuse the matching prefix.
 
 For the `gpt-4.1` models in this lab, an eligible request required at least 1,024 input tokens. The first 1,024 tokens had to match a recent request.
 
-Organize the request by what stays stable:
+The service does not cache request fields independently. It starts at the beginning and reuses matching content only until the first change. That is why request order matters.
 
-| Request position | Content | Cache behavior |
-|---|---|---|
-| **Stable prefix** | System instructions, examples, output rules, and shared reference content | Can be reused when the prefix remains identical |
-| **Variable suffix** | Current question, image, document, request ID, or other request-specific data | Processed normally |
+Here is a simplified Responses API request:
+
+```json
+{
+  "model": "<deployment-name>",
+  "instructions": "[REUSABLE] Stable system instructions, examples, and output rules",
+  "input": [
+    {
+      "type": "message",
+      "role": "user",
+      "content": [
+        {
+          "type": "input_text",
+          "text": "[REUSABLE] Reference content shared by many requests"
+        },
+        {
+          "type": "input_text",
+          "text": "[CHANGES] The current user's question"
+        }
+      ]
+    }
+  ]
+}
+```
+
+The reusable beginning can contain system instructions, examples, output rules, tool definitions, or shared reference text. Keep it identical and put it first. Put the current question, request ID, image, document, or other changing content afterward.
 
 If a timestamp or request ID appears at the beginning, requests differ immediately and the stable instructions that follow cannot form one long matching prefix.
 
 Warm-prefix caching reduced text median latency by **14.9%** and image median latency by **23.6%**. Average text time to first token fell from 991 ms to 602 ms.
 
-We verified the mechanism instead of assuming it worked: warm requests reported cached tokens, while controls that changed the beginning reported none.
+We verified the mechanism instead of assuming it worked. Roughly 93-100% of repeated requests reported a cache hit. Control requests changed a value at the beginning and reported no cached tokens.
+
+> Put shared content first, put request-specific content last, and check `cached_tokens` in the response.
 
 Caching did not produce a clear median improvement for file or function-tool tasks in this run. Reusing prompt work matters less when document processing, tool selection, or another stage dominates.
 
@@ -169,10 +193,10 @@ This is a scheduling result. It applies only when requests are independent and m
 
 The function-tool task needed both weather and local time:
 
-| Design | Model and tool sequence | Model requests |
-|---|---|---:|
-| **Sequential selection** | Model -> weather -> model -> time -> model -> final answer | 3 |
-| **Single-round selection** | Model -> weather + time -> model -> final answer | 2 |
+```text
+Slower: model -> weather -> model -> time -> model -> final answer
+Faster: model -> weather + time -> model -> final answer
+```
 
 The faster design allowed one model response to request both functions. It reduced the workflow from three model requests to two and lowered p50 from **3,646 ms to 2,617 ms**, a **28.2%** improvement.
 
@@ -223,7 +247,7 @@ Use tool search when catalogue size, context pressure, or selection quality is t
 
 See [Tool search](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-search) and the [Toolbox overview](https://learn.microsoft.com/azure/foundry/agents/concepts/toolbox-overview).
 
-## Apply Priority Processing after software optimization
+## 5. Apply Priority Processing after software optimization
 
 Our first Priority Processing-labelled requests taught an important validation lesson: the selected model did not support the requested tier, and every response reported `service_tier=default`.
 
