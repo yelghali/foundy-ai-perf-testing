@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ai-response-perf"
+version = "0.1.0"
+description = "Cross-scenario performance benchmarks for AI applications"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "azure-ai-projects>=2.3,<3",
+    "aiohttp>=3.13,<4",
+    "azure-identity>=1.24,<2",
+    "azure-storage-blob>=12.27,<13",
+    "httpx>=0.28,<1",
+    "mcp>=1.13,<2",
+    "openai>=1.99,<3",
+    "pillow>=11,<13",
+    "reportlab>=4.4,<5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.4,<9",
+    "pytest-asyncio>=1.1,<2",
+    "ruff>=0.12,<1",
+]
+
+[project.scripts]
+ai-perf = "ai_perf.cli:main"
+ai-perf-mcp = "ai_perf.mcp_server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ai_perf"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

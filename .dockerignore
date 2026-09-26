@@ -1,0 +1,12 @@
+.git
+.venv
+terraform
+*.tfstate*
+results
+tests
+docs
+__pycache__
+.pytest_cache
+.ruff_cache
+tmp
+foundry-identity-poc

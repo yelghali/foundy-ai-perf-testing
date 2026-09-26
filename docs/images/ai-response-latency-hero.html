@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI response latency comparison</title>
+  <script>
+    (() => {
+      const param = new URLSearchParams(window.location.search).get("clawpilotTheme");
+      const theme =
+        param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --cp-bg: #f7f4ef;
+      --cp-bg-elevated: #fcfbf8;
+      --cp-surface: #ffffff;
+      --cp-surface-soft: #f5f5f5;
+      --cp-border: #dedede;
+      --cp-border-strong: #919191;
+      --cp-text: #242424;
+      --cp-text-muted: #5c5c5c;
+      --cp-text-soft: #6f6f6f;
+      --cp-accent: #b11f4b;
+      --cp-accent-hover: #9a1a41;
+      --cp-accent-soft: rgba(177, 31, 75, 0.08);
+      --cp-accent-fg: #ffffff;
+      --cp-success: #16a34a;
+      --cp-danger: #dc2626;
+      --cp-warning: #f59e0b;
+      --cp-link: #0078d4;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+      --cp-overlay: rgba(255, 255, 255, 0.8);
+      --cp-panel: rgba(255, 255, 255, 0.86);
+      --cp-panel-strong: rgba(255, 255, 255, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.55);
+      --cp-highlight: rgba(177, 31, 75, 0.12);
+    }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --cp-bg: #3d3b3a;
+      --cp-bg-elevated: #343231;
+      --cp-surface: #292929;
+      --cp-surface-soft: #2e2e2e;
+      --cp-border: #474747;
+      --cp-border-strong: #5f5f5f;
+      --cp-text: #dedede;
+      --cp-text-muted: #919191;
+      --cp-text-soft: #b0b0b0;
+      --cp-accent: #fd8ea1;
+      --cp-accent-hover: #fb7b91;
+      --cp-accent-soft: rgba(253, 142, 161, 0.14);
+      --cp-accent-fg: #1a1a1a;
+      --cp-success: #4ade80;
+      --cp-danger: #f87171;
+      --cp-warning: #fbbf24;
+      --cp-link: #4da6ff;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+      --cp-overlay: rgba(41, 41, 41, 0.88);
+      --cp-panel: rgba(41, 41, 41, 0.72);
+      --cp-panel-strong: rgba(41, 41, 41, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.04);
+      --cp-highlight: rgba(253, 142, 161, 0.12);
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--cp-bg);
+      color: var(--cp-text);
+      font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    body {
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+    .hero {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--cp-bg);
+    }
+    svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .title {
+      font-size: 54px;
+      font-weight: 700;
+      fill: var(--cp-text);
+      letter-spacing: -1.2px;
+    }
+    .subtitle {
+      font-size: 25px;
+      font-weight: 400;
+      fill: var(--cp-text-muted);
+    }
+    .badge {
+      fill: var(--cp-accent-soft);
+      stroke: var(--cp-accent);
+    }
+    .badge-text {
+      font-size: 18px;
+      font-weight: 600;
+      fill: var(--cp-accent);
+    }
+    .panel {
+      fill: var(--cp-surface);
+      stroke: var(--cp-border);
+    }
+    .legend {
+      font-size: 20px;
+      fill: var(--cp-text-muted);
+    }
+    .scenario {
+      font-size: 27px;
+      font-weight: 650;
+      fill: var(--cp-text);
+    }
+    .axis-label,
+    .footer {
+      font-size: 18px;
+      fill: var(--cp-text-muted);
+    }
+    .value {
+      font-size: 18px;
+      font-weight: 600;
+      fill: var(--cp-text);
+    }
+    .callout-heading {
+      font-size: 17px;
+      font-weight: 600;
+      fill: var(--cp-text-muted);
+    }
+    .callout {
+      fill: var(--cp-accent-soft);
+      stroke: var(--cp-accent);
+    }
+    .callout-text {
+      font-size: 23px;
+      font-weight: 700;
+      fill: var(--cp-accent);
+    }
+    .grid {
+      stroke: var(--cp-border);
+      stroke-width: 1;
+    }
+    .nonoptimized {
+      fill: var(--cp-border-strong);
+    }
+    .optimized {
+      fill: var(--cp-text-muted);
+    }
+    .priority {
+      fill: var(--cp-accent);
+    }
+  </style>
+</head>
+<body>
+  <main class="hero" aria-label="AI response latency comparison chart">
+    <svg viewBox="0 0 1600 900" role="img" aria-labelledby="chart-title chart-desc">
+      <title id="chart-title">23 to 50 percent lower median AI-path latency</title>
+      <desc id="chart-desc">
+        Grouped horizontal bars compare Non-optimized Standard pay-as-you-go,
+        Optimized Standard pay-as-you-go, and Optimized plus Priority Processing
+        for text, image, file, and tool workloads.
+      </desc>
+
+      <text class="title" x="64" y="78">23-50% lower median AI-path latency</text>
+      <text class="subtitle" x="66" y="124">
+        Non-optimized Standard (PAYGO) vs Optimized Standard (PAYGO) vs Optimized + Priority Processing
+      </text>
+
+      <rect class="badge" x="1322" y="51" width="214" height="48" rx="10"/>
+      <text class="badge-text" x="1429" y="82" text-anchor="middle">Real Azure requests</text>
+
+      <rect class="nonoptimized" x="67" y="165" width="28" height="18" rx="4"/>
+      <text class="legend" x="107" y="181">Non-optimized Standard (PAYGO)</text>
+      <rect class="optimized" x="426" y="165" width="28" height="18" rx="4"/>
+      <text class="legend" x="466" y="181">Optimized Standard (PAYGO)</text>
+      <rect class="priority" x="758" y="165" width="28" height="18" rx="4"/>
+      <text class="legend" x="798" y="181">Optimized + Priority Processing</text>
+      <text class="legend" x="1372" y="181">Lower is better</text>
+
+      <rect class="panel" x="40" y="210" width="1520" height="610" rx="16"/>
+
+      <line class="grid" x1="320" y1="240" x2="320" y2="770"/>
+      <line class="grid" x1="540" y1="240" x2="540" y2="770"/>
+      <line class="grid" x1="760" y1="240" x2="760" y2="770"/>
+      <line class="grid" x1="980" y1="240" x2="980" y2="770"/>
+      <line class="grid" x1="1200" y1="240" x2="1200" y2="770"/>
+
+      <text class="callout-heading" x="1408" y="248" text-anchor="middle">Improvement</text>
+      <text class="callout-heading" x="1408" y="270" text-anchor="middle">vs non-optimized</text>
+
+      <text class="scenario" x="74" y="323">Text</text>
+      <rect class="nonoptimized" x="320" y="270" width="455" height="24" rx="6"/>
+      <text class="value" x="787" y="289">2.07 s</text>
+      <rect class="optimized" x="320" y="306" width="468" height="24" rx="6"/>
+      <text class="value" x="800" y="325">2.13 s</text>
+      <rect class="priority" x="320" y="342" width="269" height="24" rx="6"/>
+      <text class="value" x="601" y="361">1.22 s</text>
+      <rect class="callout" x="1320" y="294" width="176" height="52" rx="10"/>
+      <text class="callout-text" x="1408" y="328" text-anchor="middle">41% lower</text>
+
+      <text class="scenario" x="74" y="453">Image</text>
+      <rect class="nonoptimized" x="320" y="400" width="632" height="24" rx="6"/>
+      <text class="value" x="964" y="419">2.87 s</text>
+      <rect class="optimized" x="320" y="436" width="491" height="24" rx="6"/>
+      <text class="value" x="823" y="455">2.23 s</text>
+      <rect class="priority" x="320" y="472" width="319" height="24" rx="6"/>
+      <text class="value" x="651" y="491">1.45 s</text>
+      <rect class="callout" x="1320" y="424" width="176" height="52" rx="10"/>
+      <text class="callout-text" x="1408" y="458" text-anchor="middle">50% lower</text>
+
+      <text class="scenario" x="74" y="583">File</text>
+      <rect class="nonoptimized" x="320" y="530" width="333" height="24" rx="6"/>
+      <text class="value" x="665" y="549">1.51 s</text>
+      <rect class="optimized" x="320" y="566" width="274" height="24" rx="6"/>
+      <text class="value" x="606" y="585">1.25 s</text>
+      <rect class="priority" x="320" y="602" width="256" height="24" rx="6"/>
+      <text class="value" x="588" y="621">1.17 s</text>
+      <rect class="callout" x="1320" y="554" width="176" height="52" rx="10"/>
+      <text class="callout-text" x="1408" y="588" text-anchor="middle">23% lower</text>
+
+      <text class="scenario" x="74" y="713">Tools</text>
+      <rect class="nonoptimized" x="320" y="660" width="840" height="24" rx="6"/>
+      <text class="value" x="1172" y="679">3.82 s</text>
+      <rect class="optimized" x="320" y="696" width="621" height="24" rx="6"/>
+      <text class="value" x="953" y="715">2.82 s</text>
+      <rect class="priority" x="320" y="732" width="526" height="24" rx="6"/>
+      <text class="value" x="858" y="751">2.39 s</text>
+      <rect class="callout" x="1320" y="684" width="176" height="52" rx="10"/>
+      <text class="callout-text" x="1408" y="718" text-anchor="middle">37% lower</text>
+
+      <text class="axis-label" x="320" y="798" text-anchor="middle">0</text>
+      <text class="axis-label" x="540" y="798" text-anchor="middle">1 s</text>
+      <text class="axis-label" x="760" y="798" text-anchor="middle">2 s</text>
+      <text class="axis-label" x="980" y="798" text-anchor="middle">3 s</text>
+      <text class="axis-label" x="1200" y="798" text-anchor="middle">4 s</text>
+
+      <text class="footer" x="800" y="864" text-anchor="middle">
+        Chart shows p50; the lab also compares p95 and correctness
+      </text>
+    </svg>
+  </main>
+</body>
+</html>

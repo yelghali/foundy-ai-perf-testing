@@ -1,0 +1,16 @@
+location            = "eastus2"
+project_name        = "aiperf"
+model_name          = "gpt-4.1-mini"
+model_version       = "2025-04-14"
+deployment_name     = "gpt-4.1-mini"
+deployment_sku_name = "GlobalStandard"
+deployment_capacity = 100
+fast_model_name            = "gpt-4.1-nano"
+fast_model_version         = "2025-04-14"
+fast_deployment_name       = "gpt-4.1-nano"
+fast_deployment_capacity = 100
+priority_model_name            = "gpt-4.1"
+priority_model_version         = "2025-04-14"
+priority_deployment_name       = "gpt-4.1-priority-benchmark"
+priority_deployment_capacity   = 100
+benchmark_image_tag        = "latest"
