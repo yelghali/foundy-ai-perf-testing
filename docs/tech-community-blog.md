@@ -28,7 +28,7 @@ Automated deterministic scorers checked required fields, facts, tool calls, and 
 
 **AI-path latency** starts immediately before a model request or an orchestrated model-and-tool workflow and stops when that response or workflow completes. Validation determines whether the result enters the latency analysis, but validation time is outside the primary timer. User-to-application networking, UI rendering, and preprocessing such as image resizing, PDF generation, text extraction, or OCR are also excluded.
 
-The benchmark ran on **4 September 2026** using one Azure account with resources in East US 2. Runs executed one benchmark case at a time, except where a treatment explicitly tested internal request or tool fan-out. The combined benchmark used a Global Standard deployment, so East US 2 identifies the resource region, not a guarantee that inference processing remained there. The individual-optimization tests used `gpt-4.1-mini`; the combined benchmark used `gpt-4.1`, version `2025-04-14`. This was not a load test, and percentages from the two result sets should not be combined.
+The benchmark used one Azure account with resources in East US 2. Runs executed one benchmark case at a time, except where a treatment explicitly tested internal request or tool fan-out. The combined benchmark used an Azure OpenAI Global Standard deployment, so East US 2 identifies the resource region, not a guarantee that inference processing remained there. The individual-optimization tests used `gpt-4.1-mini`; the combined benchmark used `gpt-4.1`, version `2025-04-14`. This was not a load test, and percentages from the two result sets should not be combined.
 
 The fixtures were synthetic and deterministic. The combined benchmark reused the same fixture families, so it was not an independent replication on held-out production inputs. We used 5,000-sample bootstrap intervals for median effects; intervals were not adjusted for multiple comparisons, and p95 from 30 observations is descriptive. The [lab report](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/docs/lab-report.md) documents the protocol and limitations; the [result ledger](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/docs/publication-results.md) contains execution IDs, artifact versions, intervals, and reliability events.
 
@@ -278,7 +278,7 @@ Use the following sequence for each experiment:
 
 ## Reproduce or inspect the lab
 
-The [AI response performance benchmark repository](https://github.com/yelghali/foundy-ai-perf-testing) contains the benchmark implementation, Terraform environment, deterministic fixtures, raw-result processing, and reports. The linked URL retains the project's original `foundy-ai-perf-testing` slug.
+The [AI response performance benchmark repository](https://github.com/yelghali/foundy-ai-perf-testing) contains the benchmark implementation, Terraform environment, deterministic fixtures, raw-result processing, and reports.
 
 Follow the repository README to configure the Azure environment and run the included smoke, one-lever, and combined benchmark profiles. Start with the smoke profile before paid benchmark rounds. Use synthetic or approved data, confirm quota and expected cost, and replace the included fixtures with examples that represent the production workload.
 
