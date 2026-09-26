@@ -1,32 +1,18 @@
-# How to make AI responses faster on Microsoft Foundry: evidence from 2,040 measured task attempts
+# How to make AI responses faster on Microsoft Foundry: lessons from 2,040 measurements
 
 ![Grouped bars compare median AI-path latency for non-optimized Standard pay-as-you-go, optimized Standard pay-as-you-go, and optimized with Priority Processing across text, image, file, and function tool workloads; total reductions range from 23% to 50%.](./images/ai-response-latency-hero.png)
 
-A faster model does not always produce a faster AI application.
+A faster model does not always make an AI application faster.
 
-Latency can come from generating text the application does not use, processing visual detail the task does not need, sending the same prompt content repeatedly, discovering tools, opening MCP sessions, waiting for independent requests in sequence, or adding another model round to a tool workflow.
+Latency also comes from output length, repeated prompt content, image and document processing, tool selection, connection setup, serial waits, and extra model requests.
 
-To separate those effects, we built a reproducible performance lab on Microsoft Foundry. The analyzed evidence set contains 2,040 measured task attempts across text, image, file, function-tool, MCP, and Microsoft Foundry Toolbox workloads. The publication-run audit trail contains 2,160 measured executions, excluding cloud preflights and including 120 earlier client-lifecycle runs discarded after correcting the timing boundary.
-
-The main result was not one universal optimization. It was an order of operations:
-
-1. remove unnecessary work;
-2. reuse work and connections;
-3. remove serial waits and avoidable model requests;
-4. then test Priority Processing for the provider time that remains.
-
-In our final confirmation, combining supported software changes with verified Priority Processing reduced median AI-path latency by **23% to 50%**, depending on the workload, compared with a non-optimized Standard pay-as-you-go configuration.
-
-That is a comparison of complete configurations. It is **not** the isolated effect of Priority Processing.
+Comparing complete configurations, optimized software plus verified Priority Processing reduced median AI-path latency by **23% to 50%**, depending on the workload, versus non-optimized Standard pay-as-you-go. This result does **not** isolate the effect of Priority Processing.
 
 > **Want the short version?**
 >
-> - Generate only the output the application needs.
-> - Put stable prompt content first and verify cache hits.
-> - Use the least expensive multimodal representation that preserves required evidence.
-> - Remove serial waits and unnecessary model rounds.
-> - Limit the active tool surface and reuse app-managed MCP sessions.
-> - Apply Priority Processing only after software optimization, and verify the returned service tier.
+> - Remove unnecessary output, visual processing, and tool definitions.
+> - Reuse stable prompt prefixes and app-managed MCP sessions.
+> - Remove serial waits and model rounds, then test Priority Processing on the work that remains.
 >
 > Measure correctness and reliability with latency. A fast wrong answer is not a performance improvement.
 
@@ -34,31 +20,17 @@ That is a comparison of complete configurations. It is **not** the isolated effe
 
 ## What we measured
 
-We used five deterministic fixtures per scenario, three unmeasured warm-ups, and 30 randomized rounds per case. Treatment and control ran against the same rotating fixtures in a seeded, interleaved schedule. Comparisons were paired by round when treatment and control were part of the same execution.
+Each measurement represents one execution of a specific scenario, variant, and fixture. Each case produced 30 measured observations across five deterministic fixtures in a seeded randomized schedule. Treatment and control were paired when they ran against the same fixture and round in one execution.
 
-The full evidence set contains:
+The analyzed dataset contains **2,040 measurements**. The audit trail contains 2,160 benchmark executions recorded during the publication campaign, excluding cloud preflight checks; 120 earlier client-lifecycle runs were excluded after we corrected the timing boundary.
 
-- 1,680 analyzed measurements from the one-lever screen, including the corrected client-lifecycle comparison;
-- 120 earlier client-lifecycle timing runs discarded from analysis;
-- 360 measurements from the final three-configuration confirmation;
-- 2,040 analyzed measurements;
-- 2,160 measured publication executions, excluding cloud preflights, after including 120 discarded timing runs.
+Automated deterministic scorers checked required fields, facts, tool calls, and arguments. Failed and incorrect runs remain in reliability counts; we calculate latency percentiles only from correct completions and do not silently retry failures.
 
-We retained failed and incorrect attempts in reliability counts. Latency percentiles include only successful, correctness-passing attempts.
+**AI-path latency** starts immediately before a model request or an orchestrated model-and-tool workflow and stops when that response or workflow completes. Validation determines whether the result enters the latency analysis, but validation time is outside the primary timer. User-to-application networking, UI rendering, and preprocessing such as image resizing, PDF generation, text extraction, or OCR are also excluded.
 
-The reported **AI-path latency** starts immediately before a model request or composed model-and-tool loop and stops after the result has been validated. It excludes:
+The benchmark ran on **4 September 2026** using one Azure account with resources in East US 2. Runs executed one benchmark case at a time, except where a treatment explicitly tested internal request or tool fan-out. The combined benchmark used a Global Standard deployment, so East US 2 identifies the resource region, not a guarantee that inference processing remained there. The individual-optimization tests used `gpt-4.1-mini`; the combined benchmark used `gpt-4.1`, version `2025-04-14`. This was not a load test, and percentages from the two result sets should not be combined.
 
-- user-to-application networking;
-- UI rendering;
-- image resizing and encoding;
-- PDF generation;
-- text extraction or OCR performed before the request.
-
-This is therefore not click-to-render latency. When preprocessing was outside the timer, we use narrow claims such as "with text already extracted, the AI path was faster."
-
-The one-lever screen used `gpt-4.1-mini`. The final Priority Processing confirmation used `gpt-4.1`, version `2025-04-14`, on one Global Standard deployment in East US 2. We did not benchmark Provisioned Throughput, Foundry Agent Service invocations, RAG, or voice-agent latency in the main comparison.
-
-The [lab report](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/docs/lab-report.md) documents the complete protocol, architecture, results, and limitations. The [result ledger](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/docs/publication-results.md) contains the execution IDs, artifact versions, confidence intervals, and reliability events.
+The fixtures were synthetic and deterministic. The combined benchmark reused the same fixture families, so it was not an independent replication on held-out production inputs. We used 5,000-sample bootstrap intervals for median effects; intervals were not adjusted for multiple comparisons, and p95 from 30 observations is descriptive. The [lab report](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/docs/lab-report.md) documents the protocol and limitations; the [result ledger](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/docs/publication-results.md) contains execution IDs, artifact versions, intervals, and reliability events.
 
 ## Results at a glance
 
@@ -75,18 +47,18 @@ The table below summarizes the most decision-relevant one-lever results.
 | Request two required functions in one model response | Function tools | **28.2% faster** | Mainly one fewer model request, not just parallel handlers |
 | Expose five tools instead of 20 | Function tools | **16.8% faster** | The required tool must remain available |
 | Use minimal tool descriptions | Function tools | **14.4% faster** | Selection and arguments must stay correct |
-| Reuse an app-managed MCP session | MCP | Avoided a **34.1% cold penalty** | Requires safe lifecycle and recovery handling |
-| Add tool search to a 50-tool Toolbox | Toolbox / MCP | **43.0% slower p50** | Input tokens fell 26%; correctness and p95 improved |
+| Reuse an app-managed MCP session | MCP | A cold session was **34.1% slower** | Requires safe lifecycle and recovery handling |
+| Add tool search to a 50-tool Toolbox | Toolbox / MCP | **43.0% slower p50** | Input tokens fell 26%; 30/30 vs 29/30 correct, with a lower descriptive p95 |
 
-These are workload-specific findings, not service guarantees. A result was labelled faster only when the paired 95% interval for the median effect excluded zero. The intervals were not adjusted for testing many hypotheses, so the findings remain exploratory until independently replicated. With 30 observations per arm, p95 is descriptive rather than a release-grade tail estimate.
+These are workload-specific findings, not service guarantees. A result was labelled faster only when its paired 95% interval for the median effect excluded zero.
 
 ## 1. Remove work the task does not need
 
 ### Generate only the required output
 
-The simplest supported optimization was shortening the output contract.
+The clearest supported text optimization was shortening the output contract.
 
-For text, a compact answer reduced median latency from **2,078 ms to 1,537 ms**, a **26.0%** improvement among correct completions.
+For text, requesting a compact answer reduced median latency from **2,078 ms to 1,537 ms**, a **26.0%** improvement among correct completions.
 
 For image extraction, concise JSON reduced the median from **1,646 ms to 1,237 ms**, a **24.9%** improvement with 30/30 correct completions.
 
@@ -94,15 +66,17 @@ This does not mean every answer should be terse. It means the model should not g
 
 A UI card may require five fields. A routing step may require one enum. A tool planner may need only validated arguments. Define that contract explicitly, then verify that the shorter response still satisfies the product requirement.
 
-Reducing input is different. Removing 12 irrelevant history turns lowered the observed text median by 12.7%, but the paired interval crossed zero. That result was inconclusive for this small test. Removing irrelevant context can still reduce input-token cost, but this lab does not claim a proven latency improvement for that treatment.
+Reducing input is different. Removing 12 irrelevant history turns lowered the observed text median by 12.7%, but the paired 95% confidence interval included zero. That result was inconclusive for this small test. Removing irrelevant context can still reduce input-token cost, but this lab does not claim a proven latency improvement for that treatment.
 
 ### Use only the visual representation the task requires
 
 Low image detail was **17.8% faster** than high detail for extracting invoice ID, total, and status.
 
-Low detail asks the service to analyze a lower-resolution representation. It can work well for large, clearly printed fields, but it can miss small text, handwriting, charts, or spatial evidence. Start low only when deterministic validation confirms that every required field remains accurate.
+Low detail is not the same as resizing the source file. The full image is still sent, but `detail: "low"` asks the service to analyze a **512 x 512 representation** instead of using high-resolution tiled inspection. See [Configure image detail level](https://learn.microsoft.com/azure/foundry/openai/how-to/gpt-with-vision#configure-image-detail-level).
 
-Image resizing also lowered the median by 12.8%, but descriptive p95 increased from **5.1 seconds to 8.8 seconds**. That does not invalidate the median result, but it does mean the occasional slow attempts need more investigation. Local resize time was also outside the AI-path timer.
+This can work well for large, clearly printed fields, but it can miss small text, handwriting, charts, or spatial evidence. Start low only when deterministic validation confirms that every required field remains accurate.
+
+Image resizing also lowered the median by 12.8%, but descriptive p95 increased from **5.1 seconds to 8.8 seconds**. That does not invalidate the median result, but the slower tail-latency observations require further investigation. Local resize time was also outside the AI-path timer.
 
 For files, sending already-extracted text was **17.2% faster** than native PDF input. The claim is intentionally narrow: extraction or OCR happened before the timer.
 
@@ -112,46 +86,60 @@ Use text when the task depends only on textual facts. Keep native document proce
 
 ### Put repeated prompt content first
 
-Prompt caching reuses work on a matching prefix. It does not cache the answer, and it does not independently cache arbitrary fields.
+Prompt caching does not store the model's answer. It temporarily reuses work the service already performed on the **beginning of a long input**. The first request is processed normally; later requests can reuse the matching prefix.
 
 For the `gpt-4.1` models in this lab, an eligible request required at least 1,024 input tokens. The first 1,024 tokens had to match a recent request.
 
-The practical request shape is:
+The service does not cache request fields independently. It starts at the beginning and reuses matching content only until the first change. That is why request order matters.
 
-```text
-[STABLE] system instructions
-[STABLE] examples and output rules
-[STABLE] shared reference content
-[CHANGES] current question, image, document, or request-specific data
+Here is a simplified Responses API request:
+
+```json
+{
+  "model": "<deployment-name>",
+  "instructions": "[REUSABLE] Stable system instructions, examples, and output rules",
+  "input": [
+    {
+      "type": "message",
+      "role": "user",
+      "content": [
+        {
+          "type": "input_text",
+          "text": "[REUSABLE] Reference content shared by many requests"
+        },
+        {
+          "type": "input_text",
+          "text": "[CHANGES] The current user's question"
+        }
+      ]
+    }
+  ]
+}
 ```
+
+The reusable beginning can contain system instructions, examples, output rules, tool definitions, or shared reference text. Keep it identical and put it first. Put the current question, request ID, image, document, or other changing content afterward.
 
 If a timestamp or request ID appears at the beginning, requests differ immediately and the stable instructions that follow cannot form one long matching prefix.
 
 Warm-prefix caching reduced text median latency by **14.9%** and image median latency by **23.6%**. Average text time to first token fell from 991 ms to 602 ms.
 
-We verified the mechanism instead of assuming it worked: warm requests reported cached tokens, while controls that changed the beginning reported none.
+We verified the mechanism instead of assuming it worked. Roughly 93-100% of repeated requests reported a cache hit. Control requests changed a value at the beginning and reported no cached tokens.
+
+> Put shared content first, put request-specific content last, and check `cached_tokens` in the response.
 
 Caching did not produce a clear median improvement for file or function-tool tasks in this run. Reusing prompt work matters less when document processing, tool selection, or another stage dominates.
 
 See [Prompt caching](https://learn.microsoft.com/azure/foundry/openai/how-to/prompt-caching) for current eligibility and retention details.
 
-### Reuse app-managed MCP sessions
+### Avoid reconnecting to MCP for every task
 
-For the MCP comparison, the benchmark application was the client.
+When the application is the MCP client, connection setup and tool discovery can be a meaningful part of the critical path.
 
-A reused session completed in **2,283 ms** at p50. Creating a connection, initializing the session, and discovering tools for every task raised p50 to **3,061 ms** - a **34.1% cold penalty**. Setup and discovery averaged 1,016 ms; the local tool itself remained below 5 ms.
+A reused session completed in **2,283 ms** at p50. Opening a new session and discovering tools for every task raised p50 to **3,061 ms**: the cold path was **34.1% slower than the reused path**. Setup and discovery averaged 1,016 ms; the local tool itself remained below 5 ms.
 
-The optimization is therefore an application lifecycle decision:
+This is an application-lifecycle optimization, not a model optimization, and the result does not automatically apply to service-managed MCP.
 
-```python
-async with connect_mcp(MCP_URL) as mcp:
-    for task in tasks:
-        await handle_task(task, mcp)
-```
-
-In a service, own the connection for the application lifespan or use a bounded pool when one session cannot safely serve expected concurrency.
-
-Long-lived MCP sessions also require expiry, reconnect, authentication isolation, credential rotation, health checks, and catalogue refresh. Reuse sessions only within the appropriate credential and tenant boundary.
+Reuse a compatible session and its discovered tool catalog across tasks, or use a bounded pool when one session cannot safely serve the expected concurrency. Scope reuse by identity and tenant, and design for expiry, reconnect, credential rotation, catalog refresh, health checks, and failure isolation.
 
 The repository includes the [complete MCP connection helper](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/src/ai_perf/mcp_client.py#L51-L96).
 
@@ -169,14 +157,11 @@ This is a scheduling result. It applies only when requests are independent and m
 
 ### Remove an avoidable model round from function workflows
 
-The function-tool task needed both weather and local time.
+The function-tool task needed both weather and local time:
 
 ```text
-Slower:
-model -> weather -> model -> time -> model -> final answer
-
-Faster:
-model -> weather + time -> model -> final answer
+Slower: model -> weather -> model -> time -> model -> final answer
+Faster: model -> weather + time -> model -> final answer
 ```
 
 The faster design allowed one model response to request both functions. It reduced the workflow from three model requests to two and lowered p50 from **3,646 ms to 2,617 ms**, a **28.2%** improvement.
@@ -196,7 +181,7 @@ For app-run functions:
 
 The 28.2% result applies to app-executed function tools. It should not be transferred to service-managed MCP or Foundry Agent Service without a separate benchmark and traces showing actual execution behavior.
 
-## 4. Keep the active tool surface intentional
+## 4. Limit the tools available to each request
 
 Tool definitions are part of the model input. Even when the actual function runs in milliseconds, selection and final generation can take seconds.
 
@@ -209,36 +194,25 @@ The useful design pattern is:
 3. keep names, descriptions, and schemas concise but discriminative;
 4. validate selection and arguments, not token count alone.
 
-Other tool-schema treatments were inconclusive at this sample size. Exposing 50 tools, adding complex schemas, making descriptions ambiguous, and reordering definitions did not produce a supported median effect. Some descriptive p95 values were slower, but 30 attempts are not enough to conclude that those treatments consistently damage tail latency.
+Other tool-schema treatments were inconclusive at this sample size. Exposing 50 tools, adding complex schemas, making descriptions ambiguous, and reordering definitions did not produce a statistically supported change in median latency. Some descriptive p95 values were slower, but 30 attempts are not enough to conclude that those treatments consistently damage tail latency.
 
-### Tool search is a latency, context, and selection trade-off
+### Toolbox can improve selection, but adds a search round
 
-We compared the same synthetic 50-tool catalogue through:
+Microsoft Foundry Toolbox tool search keeps a large tool catalog out of the initial prompt and discovers relevant tools when needed.
 
-- direct remote MCP, exposing every definition to the model;
-- Microsoft Foundry Toolbox tool search, initially exposing only `tool_search` and `call_tool`.
+In this synthetic 50-tool test, it reduced average input tokens by **26%** and completed correctly **30/30** times versus **29/30** for direct MCP. However, the extra search round increased p50 from **2,528 ms to 3,614 ms** - a **43.0% increase**.
 
-Tool search reduced average input from **1,941 to 1,431 tokens**, about 26%. It also achieved 100% correctness in this run and had a better descriptive p95.
-
-However, the extra search round increased p50 from **2,528 ms to 3,614 ms**, a **43.0% median penalty**.
-
-This is not a verdict against tool search. It is the trade-off the feature is designed to make: reduce the initial context, discover relevant capabilities dynamically, and potentially improve selection as the catalogue grows.
-
-Use tool search when catalogue size, context pressure, or selection quality is the main problem. If first-turn latency matters most and the application already knows a small relevant subset, direct exposure can be faster.
+This single test does not prove that Toolbox generally improves accuracy. It shows the trade-off: use tool search when catalog size, context pressure, or tool selection is the main problem. If first-response latency matters most and the application already knows the relevant subset, exposing that smaller subset directly can be faster.
 
 See [Tool search](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-search) and the [Toolbox overview](https://learn.microsoft.com/azure/foundry/agents/concepts/toolbox-overview).
 
-## Apply Priority Processing after software optimization
+## 5. Test Priority Processing after software optimization
 
 Our first Priority Processing-labelled requests taught an important validation lesson: the selected model did not support the requested tier, and every response reported `service_tier=default`.
 
 We kept those observations in the audit trail but excluded them as Priority Processing evidence.
 
-The final confirmation used a supported `gpt-4.1` deployment. Every successful Priority Processing response reported:
-
-```text
-service_tier=priority
-```
+Unlike the individual-optimization tests on `gpt-4.1-mini`, the combined benchmark used a supported `gpt-4.1` deployment. Every successful Priority Processing response reported `service_tier=priority`.
 
 We compared:
 
@@ -255,13 +229,13 @@ We compared:
 
 Every value is median AI-path latency. The combined improvement compares optimized software plus Priority Processing with non-optimized Standard.
 
-Software alone clearly improved the image, file, and function-tool workloads. The optimized text arm was inconclusive on `gpt-4.1`.
+Software alone clearly improved the image, file, and function-tool workloads. The optimized text configuration produced an inconclusive result on `gpt-4.1`.
 
-Adding Priority Processing to the optimized setup lowered observed p50 in all four workloads. The evidence was clearest for text and image. File and function-tool results varied too much to confirm the size of their additional improvement.
+Adding Priority Processing to the optimized setup lowered observed p50 in all four workloads. The paired interval excluded zero for text and image, but crossed zero for file and function tools; the incremental effect was therefore inconclusive for those two workloads.
 
 Standard completed correctly 240/240 times. Priority Processing completed correctly 119/120 times, with one function-tool failure. For file and function-tool workloads, descriptive p95 was slower under Priority Processing than under optimized Standard in this run. With 30 attempts per arm, that is a reason to gather more tail observations before setting an SLO, not a firm tail-latency conclusion.
 
-Priority Processing is pay-as-you-go at its own rate. Provisioned Throughput reserves dedicated capacity measured in PTUs; it was outside this comparison. Review the current [deployment categories](https://learn.microsoft.com/azure/foundry/openai/concepts/provisioned-throughput#deployment-categories-compared) and [Priority Processing documentation](https://learn.microsoft.com/azure/foundry/openai/concepts/priority-processing) before selecting a processing option.
+Priority Processing is pay-as-you-go at its own rate. Provisioned Throughput reserves dedicated capacity measured in PTUs; it was outside this comparison. We did not calculate currency cost, so evaluate current regional pricing separately. Review the current [deployment categories](https://learn.microsoft.com/azure/foundry/openai/concepts/provisioned-throughput#deployment-categories-compared) and [Priority Processing documentation](https://learn.microsoft.com/azure/foundry/openai/concepts/priority-processing) before selecting a processing option.
 
 ## What did not produce a clear median improvement
 
@@ -302,42 +276,11 @@ Use the following sequence for each experiment:
 6. calculate latency only from correct completions;
 7. test compatible winners together instead of adding isolated percentages.
 
-## Reproduce the lab
+## Reproduce or inspect the lab
 
-The [foundy-ai-perf-testing repository](https://github.com/yelghali/foundy-ai-perf-testing) contains the benchmark implementation, Terraform environment, deterministic fixtures, raw-result processing, and reports.
+The [AI response performance benchmark repository](https://github.com/yelghali/foundy-ai-perf-testing) contains the benchmark implementation, Terraform environment, deterministic fixtures, raw-result processing, and reports. The linked URL retains the project's original `foundy-ai-perf-testing` slug.
 
-After configuring the documented Azure environment variables, run a smoke test before starting paid benchmark rounds:
-
-```powershell
-ai-perf run-suite `
-  --profile smoke `
-  --warmups 1 `
-  --repetitions 2
-```
-
-Run the one-lever screen:
-
-```powershell
-ai-perf run-suite `
-  --profile screen `
-  --warmups 3 `
-  --repetitions 30 `
-  --schedule interleaved `
-  --seed 20260904
-```
-
-Then run the combined confirmation:
-
-```powershell
-ai-perf run-suite `
-  --profile bundle `
-  --warmups 3 `
-  --repetitions 30 `
-  --schedule interleaved `
-  --seed 20260904
-```
-
-Use synthetic or approved data, confirm quota and expected cost before running, and replace the included fixtures with examples that represent the production workload.
+Follow the repository README to configure the Azure environment and run the included smoke, one-lever, and combined benchmark profiles. Start with the smoke profile before paid benchmark rounds. Use synthetic or approved data, confirm quota and expected cost, and replace the included fixtures with examples that represent the production workload.
 
 The repository also includes:
 
@@ -346,4 +289,4 @@ The repository also includes:
 - the auditable [publication result ledger](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/docs/publication-results.md);
 - an [AI response performance Copilot skill](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/.github/skills/ai-response-performance/SKILL.md) for applying the method to another repository.
 
-The most useful next comparison is not another universal optimization rule. It is the same controlled experiment on a different model, region, and production-shaped workload: which change moved p50, which changed p95, and which looked faster until correctness was included?
+Start with the real task: define correctness, measure each stage, remove avoidable work, and then test the platform options that target the time still left in the critical path.
