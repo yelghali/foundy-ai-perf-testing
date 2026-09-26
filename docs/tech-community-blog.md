@@ -20,15 +20,15 @@ Comparing complete configurations, optimized software plus verified Priority Pro
 
 ## What we measured
 
-One measurement is one scenario, variant, and fixture execution. Each case produced 30 measured observations across five deterministic fixtures in a seeded randomized schedule. Treatment and control were paired when they ran against the same fixture and round in one execution.
+Each measurement represents one execution of a specific scenario, variant, and fixture. Each case produced 30 measured observations across five deterministic fixtures in a seeded randomized schedule. Treatment and control were paired when they ran against the same fixture and round in one execution.
 
-The analyzed dataset contains **2,040 measurements**. The audit trail contains 2,160 publication executions, excluding cloud preflights; 120 earlier client-lifecycle runs were excluded after we corrected the timing boundary.
+The analyzed dataset contains **2,040 measurements**. The audit trail contains 2,160 benchmark executions used for publication, excluding cloud preflight checks; 120 earlier client-lifecycle runs were excluded after we corrected the timing boundary.
 
 Automated deterministic scorers checked required fields, facts, tool calls, and arguments. Failed and incorrect runs remain in reliability counts; we calculate latency percentiles only from correct completions and do not silently retry failures.
 
-**AI-path latency** starts immediately before a model request or composed model-and-tool loop and stops when that response or workflow completes. Validation determines whether the result enters the latency analysis, but validation time is outside the primary timer. User-to-application networking, UI rendering, and preprocessing such as image resizing, PDF generation, text extraction, or OCR are also excluded.
+**AI-path latency** starts immediately before a model request or an orchestrated model-and-tool workflow and stops when that response or workflow completes. Validation determines whether the result enters the latency analysis, but validation time is outside the primary timer. User-to-application networking, UI rendering, and preprocessing such as image resizing, PDF generation, text extraction, or OCR are also excluded.
 
-All accepted runs used one Azure account with resources in East US 2 on 4 September 2026, at concurrency 1. The combined benchmark used a Global Standard deployment, so East US 2 identifies the resource region, not a guarantee that inference processing remained there. The one-lever screen used `gpt-4.1-mini`; the combined benchmark used `gpt-4.1`, version `2025-04-14`. This was not a load test, and percentages from the two result sets should not be combined.
+All accepted runs used one Azure account with resources in East US 2 on 4 September 2026, at concurrency 1. The combined benchmark used a Global Standard deployment, so East US 2 identifies the resource region, not a guarantee that inference processing remained there. The individual-optimization tests used `gpt-4.1-mini`; the combined benchmark used `gpt-4.1`, version `2025-04-14`. This was not a load test, and percentages from the two result sets should not be combined.
 
 The fixtures were synthetic and deterministic. The combined benchmark reused the same fixture families, so it was not an independent replication on held-out production inputs. We used 5,000-sample bootstrap intervals for median effects; intervals were not adjusted for multiple comparisons, and p95 from 30 observations is descriptive. The [lab report](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/docs/lab-report.md) documents the protocol and limitations; the [result ledger](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/docs/publication-results.md) contains execution IDs, artifact versions, intervals, and reliability events.
 
@@ -58,7 +58,7 @@ These are workload-specific findings, not service guarantees. A result was label
 
 The clearest supported text optimization was shortening the output contract.
 
-For text, a compact answer reduced median latency from **2,078 ms to 1,537 ms**, a **26.0%** improvement among correct completions.
+For text, requesting a compact answer reduced median latency from **2,078 ms to 1,537 ms**, a **26.0%** improvement among correct completions.
 
 For image extraction, concise JSON reduced the median from **1,646 ms to 1,237 ms**, a **24.9%** improvement with 30/30 correct completions.
 
@@ -66,7 +66,7 @@ This does not mean every answer should be terse. It means the model should not g
 
 A UI card may require five fields. A routing step may require one enum. A tool planner may need only validated arguments. Define that contract explicitly, then verify that the shorter response still satisfies the product requirement.
 
-Reducing input is different. Removing 12 irrelevant history turns lowered the observed text median by 12.7%, but the paired interval crossed zero. That result was inconclusive for this small test. Removing irrelevant context can still reduce input-token cost, but this lab does not claim a proven latency improvement for that treatment.
+Reducing input is different. Removing 12 irrelevant history turns lowered the observed text median by 12.7%, but the paired 95% confidence interval included zero. That result was inconclusive for this small test. Removing irrelevant context can still reduce input-token cost, but this lab does not claim a proven latency improvement for that treatment.
 
 ### Use only the visual representation the task requires
 
@@ -76,7 +76,7 @@ Low detail is not the same as resizing the source file. The full image is still 
 
 This can work well for large, clearly printed fields, but it can miss small text, handwriting, charts, or spatial evidence. Start low only when deterministic validation confirms that every required field remains accurate.
 
-Image resizing also lowered the median by 12.8%, but descriptive p95 increased from **5.1 seconds to 8.8 seconds**. That does not invalidate the median result, but it does mean the occasional slow attempts need more investigation. Local resize time was also outside the AI-path timer.
+Image resizing also lowered the median by 12.8%, but descriptive p95 increased from **5.1 seconds to 8.8 seconds**. That does not invalidate the median result, but the slower tail-latency observations require further investigation. Local resize time was also outside the AI-path timer.
 
 For files, sending already-extracted text was **17.2% faster** than native PDF input. The claim is intentionally narrow: extraction or OCR happened before the timer.
 
@@ -139,7 +139,7 @@ A reused session completed in **2,283 ms** at p50. Opening a new session and dis
 
 This is an application-lifecycle optimization, not a model optimization, and the result does not automatically apply to service-managed MCP.
 
-Keep a compatible session and its discovered tool catalogue alive across tasks, or use a bounded pool when one session cannot safely serve the expected concurrency. Scope reuse by identity and tenant, and design for expiry, reconnect, credential rotation, catalogue refresh, health checks, and failure isolation.
+Reuse a compatible session and its discovered tool catalog across tasks, or use a bounded pool when one session cannot safely serve the expected concurrency. Scope reuse by identity and tenant, and design for expiry, reconnect, credential rotation, catalog refresh, health checks, and failure isolation.
 
 The repository includes the [complete MCP connection helper](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/src/ai_perf/mcp_client.py#L51-L96).
 
@@ -181,7 +181,7 @@ For app-run functions:
 
 The 28.2% result applies to app-executed function tools. It should not be transferred to service-managed MCP or Foundry Agent Service without a separate benchmark and traces showing actual execution behavior.
 
-## 4. Keep the active tool surface intentional
+## 4. Limit the tools available to each request
 
 Tool definitions are part of the model input. Even when the actual function runs in milliseconds, selection and final generation can take seconds.
 
@@ -194,7 +194,7 @@ The useful design pattern is:
 3. keep names, descriptions, and schemas concise but discriminative;
 4. validate selection and arguments, not token count alone.
 
-Other tool-schema treatments were inconclusive at this sample size. Exposing 50 tools, adding complex schemas, making descriptions ambiguous, and reordering definitions did not produce a supported median effect. Some descriptive p95 values were slower, but 30 attempts are not enough to conclude that those treatments consistently damage tail latency.
+Other tool-schema treatments were inconclusive at this sample size. Exposing 50 tools, adding complex schemas, making descriptions ambiguous, and reordering definitions did not produce a statistically supported change in median latency. Some descriptive p95 values were slower, but 30 attempts are not enough to conclude that those treatments consistently damage tail latency.
 
 ### Tool search is a latency, context, and selection trade-off
 
@@ -202,7 +202,7 @@ In one synthetic 50-tool case study, direct remote MCP exposed every definition;
 
 Tool search reduced average input from **1,941 to 1,431 tokens**, about 26%. It completed correctly 30/30 times versus 29/30 for direct MCP and had a lower descriptive p95. The extra search round nevertheless increased p50 from **2,528 ms to 3,614 ms**, a **43.0% median penalty**.
 
-This result is specific to one BM25-friendly catalogue. Use tool search when catalogue size, context pressure, or selection quality is the main problem. If first-turn latency matters most and the application already knows a small relevant subset, direct exposure can be faster.
+This result is specific to one tool catalog well suited to BM25 retrieval. Use tool search when catalog size, context pressure, or selection quality is the main problem. If first-turn latency matters most and the application already knows a small relevant subset, direct exposure can be faster.
 
 See [Tool search](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-search) and the [Toolbox overview](https://learn.microsoft.com/azure/foundry/agents/concepts/toolbox-overview).
 
@@ -212,7 +212,7 @@ Our first Priority Processing-labelled requests taught an important validation l
 
 We kept those observations in the audit trail but excluded them as Priority Processing evidence.
 
-Unlike the one-lever screen on `gpt-4.1-mini`, the combined benchmark used a supported `gpt-4.1` deployment. Every successful Priority Processing response reported `service_tier=priority`.
+Unlike the individual-optimization tests on `gpt-4.1-mini`, the combined benchmark used a supported `gpt-4.1` deployment. Every successful Priority Processing response reported `service_tier=priority`.
 
 We compared:
 
@@ -229,7 +229,7 @@ We compared:
 
 Every value is median AI-path latency. The combined improvement compares optimized software plus Priority Processing with non-optimized Standard.
 
-Software alone clearly improved the image, file, and function-tool workloads. The optimized text arm was inconclusive on `gpt-4.1`.
+Software alone clearly improved the image, file, and function-tool workloads. The optimized text configuration produced an inconclusive result on `gpt-4.1`.
 
 Adding Priority Processing to the optimized setup lowered observed p50 in all four workloads. The paired interval excluded zero for text and image, but crossed zero for file and function tools; the incremental effect was therefore inconclusive for those two workloads.
 
