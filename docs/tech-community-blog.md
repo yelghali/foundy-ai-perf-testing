@@ -6,20 +6,13 @@ A faster model does not always make an AI application faster.
 
 Latency also comes from output length, repeated prompt content, image and document processing, tool selection, connection setup, serial waits, and extra model requests.
 
-Across 2,040 analyzed measurements, the useful sequence was consistent: remove unnecessary work, reuse what can be reused, remove serial waits and avoidable model requests, then test Priority Processing.
-
-In a combined benchmark, supported software changes plus verified Priority Processing reduced median AI-path latency by **23% to 50%**, depending on the workload, compared with a non-optimized Standard pay-as-you-go configuration.
-
-That is a comparison of complete configurations. It is **not** the isolated effect of Priority Processing.
+Comparing complete configurations, optimized software plus verified Priority Processing reduced median AI-path latency by **23% to 50%**, depending on the workload, versus non-optimized Standard pay-as-you-go. This result does **not** isolate the effect of Priority Processing.
 
 > **Want the short version?**
 >
-> - Generate only the output the application needs.
-> - Put stable prompt content first and verify cache hits.
-> - Use the least expensive multimodal representation that preserves required evidence.
-> - Remove serial waits and unnecessary model rounds.
-> - Limit the active tool surface and reuse app-managed MCP sessions.
-> - Apply Priority Processing only after software optimization, and verify the returned service tier.
+> - Remove unnecessary output, visual processing, and tool definitions.
+> - Reuse stable prompt prefixes and app-managed MCP sessions.
+> - Remove serial waits and model rounds, then test Priority Processing on the work that remains.
 >
 > Measure correctness and reliability with latency. A fast wrong answer is not a performance improvement.
 
@@ -27,17 +20,17 @@ That is a comparison of complete configurations. It is **not** the isolated effe
 
 ## What we measured
 
-We ran 30 randomized rounds per case across five deterministic fixtures. Treatment and control used the same rotating fixtures and were paired when they ran in the same execution.
+One measurement is one scenario, variant, and fixture execution. Each case produced 30 measured observations across five deterministic fixtures in a seeded randomized schedule. Treatment and control were paired when they ran against the same fixture and round in one execution.
 
 The analyzed dataset contains **2,040 measurements**. The audit trail contains 2,160 publication executions, excluding cloud preflights; 120 earlier client-lifecycle runs were excluded after we corrected the timing boundary.
 
-Failed and incorrect runs remain in the reliability counts. We calculate latency percentiles only from successful, correctness-passing runs.
+Automated deterministic scorers checked required fields, facts, tool calls, and arguments. Failed and incorrect runs remain in reliability counts; we calculate latency percentiles only from correct completions and do not silently retry failures.
 
-**AI-path latency** starts immediately before a model request or composed model-and-tool loop and stops after validation. It excludes user-to-application networking, UI rendering, and preprocessing such as image resizing, PDF generation, text extraction, or OCR. It is not click-to-render latency.
+**AI-path latency** starts immediately before a model request or composed model-and-tool loop and stops when that response or workflow completes. Validation determines whether the result enters the latency analysis, but validation time is outside the primary timer. User-to-application networking, UI rendering, and preprocessing such as image resizing, PDF generation, text extraction, or OCR are also excluded.
 
-The one-lever screen used `gpt-4.1-mini`. The Priority Processing comparison used `gpt-4.1`, version `2025-04-14`, on one Global Standard deployment in East US 2. Provisioned Throughput, Foundry Agent Service, RAG, and voice-agent latency were outside the main comparison.
+All accepted runs used one Azure account with resources in East US 2 on 4 September 2026, at concurrency 1. The combined benchmark used a Global Standard deployment, so East US 2 identifies the resource region, not a guarantee that inference processing remained there. The one-lever screen used `gpt-4.1-mini`; the combined benchmark used `gpt-4.1`, version `2025-04-14`. This was not a load test, and percentages from the two result sets should not be combined.
 
-The [lab report](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/docs/lab-report.md) documents the complete protocol, architecture, results, and limitations. The [result ledger](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/docs/publication-results.md) contains the execution IDs, artifact versions, confidence intervals, and reliability events.
+The fixtures were synthetic and deterministic. The combined benchmark reused the same fixture families, so it was not an independent replication on held-out production inputs. We used 5,000-sample bootstrap intervals for median effects; intervals were not adjusted for multiple comparisons, and p95 from 30 observations is descriptive. The [lab report](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/docs/lab-report.md) documents the protocol and limitations; the [result ledger](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/docs/publication-results.md) contains execution IDs, artifact versions, intervals, and reliability events.
 
 ## Results at a glance
 
@@ -54,16 +47,16 @@ The table below summarizes the most decision-relevant one-lever results.
 | Request two required functions in one model response | Function tools | **28.2% faster** | Mainly one fewer model request, not just parallel handlers |
 | Expose five tools instead of 20 | Function tools | **16.8% faster** | The required tool must remain available |
 | Use minimal tool descriptions | Function tools | **14.4% faster** | Selection and arguments must stay correct |
-| Reuse an app-managed MCP session | MCP | Avoided a **34.1% cold penalty** | Requires safe lifecycle and recovery handling |
-| Add tool search to a 50-tool Toolbox | Toolbox / MCP | **43.0% slower p50** | Input tokens fell 26%; correctness and p95 improved |
+| Reuse an app-managed MCP session | MCP | A cold session was **34.1% slower** | Requires safe lifecycle and recovery handling |
+| Add tool search to a 50-tool Toolbox | Toolbox / MCP | **43.0% slower p50** | Input tokens fell 26%; 30/30 vs 29/30 correct, with a lower descriptive p95 |
 
-These are workload-specific findings, not service guarantees. A result was labelled faster only when the paired 95% interval for the median effect excluded zero. The intervals were not adjusted for testing many hypotheses, so the findings remain exploratory until independently replicated. With 30 observations per arm, p95 is descriptive rather than a release-grade tail estimate.
+These are workload-specific findings, not service guarantees. A result was labelled faster only when its paired 95% interval for the median effect excluded zero.
 
 ## 1. Remove work the task does not need
 
 ### Generate only the required output
 
-The simplest supported optimization was shortening the output contract.
+The clearest supported text optimization was shortening the output contract.
 
 For text, a compact answer reduced median latency from **2,078 ms to 1,537 ms**, a **26.0%** improvement among correct completions.
 
@@ -142,7 +135,7 @@ See [Prompt caching](https://learn.microsoft.com/azure/foundry/openai/how-to/pro
 
 When the application is the MCP client, connection setup and tool discovery can be a meaningful part of the critical path.
 
-A reused session completed in **2,283 ms** at p50. Opening a new session and discovering tools for every task raised p50 to **3,061 ms** - a **34.1% cold penalty**. Setup and discovery averaged 1,016 ms; the local tool itself remained below 5 ms.
+A reused session completed in **2,283 ms** at p50. Opening a new session and discovering tools for every task raised p50 to **3,061 ms**: the cold path was **34.1% slower than the reused path**. Setup and discovery averaged 1,016 ms; the local tool itself remained below 5 ms.
 
 This is an application-lifecycle optimization, not a model optimization, and the result does not automatically apply to service-managed MCP.
 
@@ -205,28 +198,21 @@ Other tool-schema treatments were inconclusive at this sample size. Exposing 50 
 
 ### Tool search is a latency, context, and selection trade-off
 
-We compared the same synthetic 50-tool catalogue through:
+In one synthetic 50-tool case study, direct remote MCP exposed every definition; Microsoft Foundry Toolbox initially exposed only `tool_search` and `call_tool`.
 
-- direct remote MCP, exposing every definition to the model;
-- Microsoft Foundry Toolbox tool search, initially exposing only `tool_search` and `call_tool`.
+Tool search reduced average input from **1,941 to 1,431 tokens**, about 26%. It completed correctly 30/30 times versus 29/30 for direct MCP and had a lower descriptive p95. The extra search round nevertheless increased p50 from **2,528 ms to 3,614 ms**, a **43.0% median penalty**.
 
-Tool search reduced average input from **1,941 to 1,431 tokens**, about 26%. It also achieved 100% correctness in this run and had a better descriptive p95.
-
-However, the extra search round increased p50 from **2,528 ms to 3,614 ms**, a **43.0% median penalty**.
-
-This is not a verdict against tool search. It is the trade-off the feature is designed to make: reduce the initial context, discover relevant capabilities dynamically, and potentially improve selection as the catalogue grows.
-
-Use tool search when catalogue size, context pressure, or selection quality is the main problem. If first-turn latency matters most and the application already knows a small relevant subset, direct exposure can be faster.
+This result is specific to one BM25-friendly catalogue. Use tool search when catalogue size, context pressure, or selection quality is the main problem. If first-turn latency matters most and the application already knows a small relevant subset, direct exposure can be faster.
 
 See [Tool search](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-search) and the [Toolbox overview](https://learn.microsoft.com/azure/foundry/agents/concepts/toolbox-overview).
 
-## 5. Apply Priority Processing after software optimization
+## 5. Test Priority Processing after software optimization
 
 Our first Priority Processing-labelled requests taught an important validation lesson: the selected model did not support the requested tier, and every response reported `service_tier=default`.
 
 We kept those observations in the audit trail but excluded them as Priority Processing evidence.
 
-The combined benchmark used a supported `gpt-4.1` deployment. Every successful Priority Processing response reported `service_tier=priority`.
+Unlike the one-lever screen on `gpt-4.1-mini`, the combined benchmark used a supported `gpt-4.1` deployment. Every successful Priority Processing response reported `service_tier=priority`.
 
 We compared:
 
@@ -245,11 +231,11 @@ Every value is median AI-path latency. The combined improvement compares optimiz
 
 Software alone clearly improved the image, file, and function-tool workloads. The optimized text arm was inconclusive on `gpt-4.1`.
 
-Adding Priority Processing to the optimized setup lowered observed p50 in all four workloads. The evidence was clearest for text and image. File and function-tool results varied too much to confirm the size of their additional improvement.
+Adding Priority Processing to the optimized setup lowered observed p50 in all four workloads. The paired interval excluded zero for text and image, but crossed zero for file and function tools; the incremental effect was therefore inconclusive for those two workloads.
 
 Standard completed correctly 240/240 times. Priority Processing completed correctly 119/120 times, with one function-tool failure. For file and function-tool workloads, descriptive p95 was slower under Priority Processing than under optimized Standard in this run. With 30 attempts per arm, that is a reason to gather more tail observations before setting an SLO, not a firm tail-latency conclusion.
 
-Priority Processing is pay-as-you-go at its own rate. Provisioned Throughput reserves dedicated capacity measured in PTUs; it was outside this comparison. Review the current [deployment categories](https://learn.microsoft.com/azure/foundry/openai/concepts/provisioned-throughput#deployment-categories-compared) and [Priority Processing documentation](https://learn.microsoft.com/azure/foundry/openai/concepts/priority-processing) before selecting a processing option.
+Priority Processing is pay-as-you-go at its own rate. Provisioned Throughput reserves dedicated capacity measured in PTUs; it was outside this comparison. We did not calculate currency cost, so evaluate current regional pricing separately. Review the current [deployment categories](https://learn.microsoft.com/azure/foundry/openai/concepts/provisioned-throughput#deployment-categories-compared) and [Priority Processing documentation](https://learn.microsoft.com/azure/foundry/openai/concepts/priority-processing) before selecting a processing option.
 
 ## What did not produce a clear median improvement
 
@@ -303,4 +289,4 @@ The repository also includes:
 - the auditable [publication result ledger](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/docs/publication-results.md);
 - an [AI response performance Copilot skill](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/.github/skills/ai-response-performance/SKILL.md) for applying the method to another repository.
 
-The most useful next comparison is not another universal optimization rule. It is the same controlled experiment on a different model, region, and production-shaped workload: which change moved p50, which changed p95, and which looked faster until correctness was included?
+Start with the real task: define correctness, measure each stage, remove avoidable work, and then test the platform options that target the time still left in the critical path.
