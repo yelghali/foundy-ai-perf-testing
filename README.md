@@ -11,8 +11,10 @@ helps all workloads.
 
 - [Detailed lab report](docs/lab-report.md) — architecture, methodology, every
   result table, reliability events, limitations, and reproduction steps.
-- [Microsoft Tech Community blog draft](docs/tech-community-blog-draft.md) —
-  the decision-oriented publication narrative and recommendations.
+- [Microsoft Tech Community blog](docs/tech-community-blog.md) — the concise,
+  publication-ready narrative and recommendations.
+- [Extended Microsoft Tech Community draft](docs/tech-community-blog-draft.md)
+  — the detailed source narrative retained for reference.
 - [Publication result ledger](docs/publication-results.md) — execution IDs,
   artifact prefixes, image digests, and the numerical source of truth.
 - [Performance testing guidelines](docs/ai-response-performance-guidelines.md)
