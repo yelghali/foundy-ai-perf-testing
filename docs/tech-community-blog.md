@@ -2,11 +2,11 @@
 
 ![Grouped bars compare median AI-path latency for non-optimized Standard pay-as-you-go, optimized Standard pay-as-you-go, and optimized with Priority Processing across text, image, file, and function tool workloads; total reductions range from 23% to 50%.](./images/ai-response-latency-hero.png)
 
-A faster model does not always produce a faster AI application.
+A faster model does not always make an AI application faster.
 
-Latency can come from generating text the application does not use, processing visual detail the task does not need, sending the same prompt content repeatedly, discovering tools, opening MCP sessions, waiting for independent requests in sequence, or adding another model round to a tool workflow.
+Latency also comes from output length, repeated prompt content, image and document processing, tool selection, connection setup, serial waits, and extra model requests.
 
-To separate those effects, we built a reproducible performance lab on Microsoft Foundry. The analyzed evidence set contains 2,040 measured task attempts across text, image, file, function-tool, MCP, and Microsoft Foundry Toolbox workloads. The publication-run audit trail contains 2,160 measured executions, excluding cloud preflights and including 120 earlier client-lifecycle runs discarded after correcting the timing boundary.
+We tested these stages in a reproducible Microsoft Foundry lab. The analyzed dataset contains 2,040 measured task attempts across text, image, file, function-tool, MCP, and Microsoft Foundry Toolbox workloads.
 
 The main result was not one universal optimization. It was an order of operations:
 
@@ -15,7 +15,7 @@ The main result was not one universal optimization. It was an order of operation
 3. remove serial waits and avoidable model requests;
 4. then test Priority Processing for the provider time that remains.
 
-In our final confirmation, combining supported software changes with verified Priority Processing reduced median AI-path latency by **23% to 50%**, depending on the workload, compared with a non-optimized Standard pay-as-you-go configuration.
+In a combined benchmark, supported software changes plus verified Priority Processing reduced median AI-path latency by **23% to 50%**, depending on the workload, compared with a non-optimized Standard pay-as-you-go configuration.
 
 That is a comparison of complete configurations. It is **not** the isolated effect of Priority Processing.
 
@@ -40,7 +40,7 @@ The full evidence set contains:
 
 - 1,680 analyzed measurements from the one-lever screen, including the corrected client-lifecycle comparison;
 - 120 earlier client-lifecycle timing runs discarded from analysis;
-- 360 measurements from the final three-configuration confirmation;
+- 360 measurements from the three-configuration combined benchmark;
 - 2,040 analyzed measurements;
 - 2,160 measured publication executions, excluding cloud preflights, after including 120 discarded timing runs.
 
@@ -56,7 +56,7 @@ The reported **AI-path latency** starts immediately before a model request or co
 
 This is therefore not click-to-render latency. When preprocessing was outside the timer, we use narrow claims such as "with text already extracted, the AI path was faster."
 
-The one-lever screen used `gpt-4.1-mini`. The final Priority Processing confirmation used `gpt-4.1`, version `2025-04-14`, on one Global Standard deployment in East US 2. We did not benchmark Provisioned Throughput, Foundry Agent Service invocations, RAG, or voice-agent latency in the main comparison.
+The one-lever screen used `gpt-4.1-mini`. The Priority Processing comparison used `gpt-4.1`, version `2025-04-14`, on one Global Standard deployment in East US 2. We did not benchmark Provisioned Throughput, Foundry Agent Service invocations, RAG, or voice-agent latency in the main comparison.
 
 The [lab report](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/docs/lab-report.md) documents the complete protocol, architecture, results, and limitations. The [result ledger](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/docs/publication-results.md) contains the execution IDs, artifact versions, confidence intervals, and reliability events.
 
@@ -116,14 +116,12 @@ Prompt caching reuses work on a matching prefix. It does not cache the answer, a
 
 For the `gpt-4.1` models in this lab, an eligible request required at least 1,024 input tokens. The first 1,024 tokens had to match a recent request.
 
-The practical request shape is:
+Organize the request by what stays stable:
 
-```text
-[STABLE] system instructions
-[STABLE] examples and output rules
-[STABLE] shared reference content
-[CHANGES] current question, image, document, or request-specific data
-```
+| Request position | Content | Cache behavior |
+|---|---|---|
+| **Stable prefix** | System instructions, examples, output rules, and shared reference content | Can be reused when the prefix remains identical |
+| **Variable suffix** | Current question, image, document, request ID, or other request-specific data | Processed normally |
 
 If a timestamp or request ID appears at the beginning, requests differ immediately and the stable instructions that follow cannot form one long matching prefix.
 
@@ -169,15 +167,12 @@ This is a scheduling result. It applies only when requests are independent and m
 
 ### Remove an avoidable model round from function workflows
 
-The function-tool task needed both weather and local time.
+The function-tool task needed both weather and local time:
 
-```text
-Slower:
-model -> weather -> model -> time -> model -> final answer
-
-Faster:
-model -> weather + time -> model -> final answer
-```
+| Design | Model and tool sequence | Model requests |
+|---|---|---:|
+| **Sequential selection** | Model -> weather -> model -> time -> model -> final answer | 3 |
+| **Single-round selection** | Model -> weather + time -> model -> final answer | 2 |
 
 The faster design allowed one model response to request both functions. It reduced the workflow from three model requests to two and lowered p50 from **3,646 ms to 2,617 ms**, a **28.2%** improvement.
 
@@ -234,11 +229,7 @@ Our first Priority Processing-labelled requests taught an important validation l
 
 We kept those observations in the audit trail but excluded them as Priority Processing evidence.
 
-The final confirmation used a supported `gpt-4.1` deployment. Every successful Priority Processing response reported:
-
-```text
-service_tier=priority
-```
+The combined benchmark used a supported `gpt-4.1` deployment. Every successful Priority Processing response reported `service_tier=priority`.
 
 We compared:
 
@@ -326,7 +317,7 @@ ai-perf run-suite `
   --seed 20260904
 ```
 
-Then run the combined confirmation:
+Then run the combined benchmark:
 
 ```powershell
 ai-perf run-suite `
