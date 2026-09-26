@@ -196,13 +196,13 @@ The useful design pattern is:
 
 Other tool-schema treatments were inconclusive at this sample size. Exposing 50 tools, adding complex schemas, making descriptions ambiguous, and reordering definitions did not produce a statistically supported change in median latency. Some descriptive p95 values were slower, but 30 attempts are not enough to conclude that those treatments consistently damage tail latency.
 
-### Tool search is a latency, context, and selection trade-off
+### Toolbox can improve selection, but adds a search round
 
-In one synthetic 50-tool case study, direct remote MCP exposed every definition; Microsoft Foundry Toolbox initially exposed only `tool_search` and `call_tool`.
+Microsoft Foundry Toolbox tool search keeps a large tool catalog out of the initial prompt and discovers relevant tools when needed.
 
-Tool search reduced average input from **1,941 to 1,431 tokens**, about 26%. It completed correctly 30/30 times versus 29/30 for direct MCP and had a lower descriptive p95. The extra search round nevertheless increased p50 from **2,528 ms to 3,614 ms**, a **43.0% median penalty**.
+In this synthetic 50-tool test, it reduced average input tokens by **26%** and completed correctly **30/30** times versus **29/30** for direct MCP. However, the extra search round increased p50 from **2,528 ms to 3,614 ms** - a **43.0% increase**.
 
-This result is specific to one tool catalog well suited to BM25 retrieval. Use tool search when catalog size, context pressure, or selection quality is the main problem. If first-turn latency matters most and the application already knows a small relevant subset, direct exposure can be faster.
+This single test does not prove that Toolbox generally improves accuracy. It shows the trade-off: use tool search when catalog size, context pressure, or tool selection is the main problem. If first-response latency matters most and the application already knows the relevant subset, exposing that smaller subset directly can be faster.
 
 See [Tool search](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-search) and the [Toolbox overview](https://learn.microsoft.com/azure/foundry/agents/concepts/toolbox-overview).
 
