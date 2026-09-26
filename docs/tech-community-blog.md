@@ -1,4 +1,4 @@
-# How to make AI responses faster on Microsoft Foundry: evidence from 2,040 measured task attempts
+# How to make AI responses faster on Microsoft Foundry: evidence from 2,040 analyzed task attempts
 
 ![Grouped bars compare median AI-path latency for non-optimized Standard pay-as-you-go, optimized Standard pay-as-you-go, and optimized with Priority Processing across text, image, file, and function tool workloads; total reductions range from 23% to 50%.](./images/ai-response-latency-hero.png)
 
@@ -6,14 +6,7 @@ A faster model does not always make an AI application faster.
 
 Latency also comes from output length, repeated prompt content, image and document processing, tool selection, connection setup, serial waits, and extra model requests.
 
-We tested these stages in a reproducible Microsoft Foundry lab. The analyzed dataset contains 2,040 measured task attempts across text, image, file, function-tool, MCP, and Microsoft Foundry Toolbox workloads.
-
-The main result was not one universal optimization. It was an order of operations:
-
-1. remove unnecessary work;
-2. reuse work and connections;
-3. remove serial waits and avoidable model requests;
-4. then test Priority Processing for the provider time that remains.
+We analyzed 2,040 task attempts covering text, image, file, function-tool, MCP, and Microsoft Foundry Toolbox workloads. The result is a practical sequence: remove unnecessary work, reuse what can be reused, remove serial waits and avoidable model requests, then test Priority Processing.
 
 In a combined benchmark, supported software changes plus verified Priority Processing reduced median AI-path latency by **23% to 50%**, depending on the workload, compared with a non-optimized Standard pay-as-you-go configuration.
 
@@ -157,23 +150,15 @@ Caching did not produce a clear median improvement for file or function-tool tas
 
 See [Prompt caching](https://learn.microsoft.com/azure/foundry/openai/how-to/prompt-caching) for current eligibility and retention details.
 
-### Reuse app-managed MCP sessions
+### Avoid reconnecting to MCP for every task
 
-For the MCP comparison, the benchmark application was the client.
+When the application is the MCP client, connection setup and tool discovery can be a meaningful part of the critical path.
 
-A reused session completed in **2,283 ms** at p50. Creating a connection, initializing the session, and discovering tools for every task raised p50 to **3,061 ms** - a **34.1% cold penalty**. Setup and discovery averaged 1,016 ms; the local tool itself remained below 5 ms.
+A reused session completed in **2,283 ms** at p50. Opening a new session and discovering tools for every task raised p50 to **3,061 ms** - a **34.1% cold penalty**. Setup and discovery averaged 1,016 ms; the local tool itself remained below 5 ms.
 
-The optimization is therefore an application lifecycle decision:
+This is an application-lifecycle optimization, not a model optimization, and the result does not automatically apply to service-managed MCP.
 
-```python
-async with connect_mcp(MCP_URL) as mcp:
-    for task in tasks:
-        await handle_task(task, mcp)
-```
-
-In a service, own the connection for the application lifespan or use a bounded pool when one session cannot safely serve expected concurrency.
-
-Long-lived MCP sessions also require expiry, reconnect, authentication isolation, credential rotation, health checks, and catalogue refresh. Reuse sessions only within the appropriate credential and tenant boundary.
+Keep a compatible session and its discovered tool catalogue alive across tasks, or use a bounded pool when one session cannot safely serve the expected concurrency. Scope reuse by identity and tenant, and design for expiry, reconnect, credential rotation, catalogue refresh, health checks, and failure isolation.
 
 The repository includes the [complete MCP connection helper](https://github.com/yelghali/foundy-ai-perf-testing/blob/main/src/ai_perf/mcp_client.py#L51-L96).
 
@@ -317,42 +302,11 @@ Use the following sequence for each experiment:
 6. calculate latency only from correct completions;
 7. test compatible winners together instead of adding isolated percentages.
 
-## Reproduce the lab
+## Reproduce or inspect the lab
 
 The [foundy-ai-perf-testing repository](https://github.com/yelghali/foundy-ai-perf-testing) contains the benchmark implementation, Terraform environment, deterministic fixtures, raw-result processing, and reports.
 
-After configuring the documented Azure environment variables, run a smoke test before starting paid benchmark rounds:
-
-```powershell
-ai-perf run-suite `
-  --profile smoke `
-  --warmups 1 `
-  --repetitions 2
-```
-
-Run the one-lever screen:
-
-```powershell
-ai-perf run-suite `
-  --profile screen `
-  --warmups 3 `
-  --repetitions 30 `
-  --schedule interleaved `
-  --seed 20260904
-```
-
-Then run the combined benchmark:
-
-```powershell
-ai-perf run-suite `
-  --profile bundle `
-  --warmups 3 `
-  --repetitions 30 `
-  --schedule interleaved `
-  --seed 20260904
-```
-
-Use synthetic or approved data, confirm quota and expected cost before running, and replace the included fixtures with examples that represent the production workload.
+Follow the repository README to configure the Azure environment and run the included smoke, one-lever, and combined benchmark profiles. Start with the smoke profile before paid benchmark rounds. Use synthetic or approved data, confirm quota and expected cost, and replace the included fixtures with examples that represent the production workload.
 
 The repository also includes:
 
