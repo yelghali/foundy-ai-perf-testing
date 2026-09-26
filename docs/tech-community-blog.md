@@ -79,7 +79,9 @@ Reducing input is different. Removing 12 irrelevant history turns lowered the ob
 
 Low image detail was **17.8% faster** than high detail for extracting invoice ID, total, and status.
 
-Low detail asks the service to analyze a lower-resolution representation. It can work well for large, clearly printed fields, but it can miss small text, handwriting, charts, or spatial evidence. Start low only when deterministic validation confirms that every required field remains accurate.
+Low detail is not the same as resizing the source file. The full image is still sent, but `detail: "low"` asks the service to analyze a **512 x 512 representation** instead of using high-resolution tiled inspection. See [Configure image detail level](https://learn.microsoft.com/azure/foundry/openai/how-to/gpt-with-vision#configure-image-detail-level).
+
+This can work well for large, clearly printed fields, but it can miss small text, handwriting, charts, or spatial evidence. Start low only when deterministic validation confirms that every required field remains accurate.
 
 Image resizing also lowered the median by 12.8%, but descriptive p95 increased from **5.1 seconds to 8.8 seconds**. That does not invalidate the median result, but it does mean the occasional slow attempts need more investigation. Local resize time was also outside the AI-path timer.
 
